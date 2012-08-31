@@ -116,6 +116,7 @@ def check_args_callback(event):
     '''
     This will be called when our breakpoint is hit. Checks if our string is a parameter.
     @param event: Event information, dear Watson.
+    @todo: dereference the values in registers as well {eax, ebx, ecx, esi, edi}
     '''        
     nrOfArguments = 5  # TODO: Take this parameter from IDA
     
@@ -139,7 +140,6 @@ def check_args_callback(event):
             try:
                 possibleString = process.read(suspectedPointer, MAX_ARGUMENT_LEN) # This is already a string, cool
                 if searchPattern in possibleString:
-                    # TODO: Check for UNICODE transformations in memory
                     if Eip not in logged_functions:
                         logged_functions.append(Eip)
                         print "[*] Found! %s is the parameter nr. %d of %08x" % (searchPattern, idx + 1, Eip)
@@ -151,6 +151,16 @@ def check_args_callback(event):
             except:
                 # Access violation. Log only by debugging (huge overhead due to I/O)
                 pass
+            
+            # Let's search for the string in UNICODE
+            possibleStringU = process.peek_string(suspectedPointer, fUnicode = True)
+            if searchPattern in possibleStringU:
+                if searchPattern in possibleString:
+                    if Eip not in logged_functions:
+                        logged_functions.append(Eip)
+                        print "[*] Found! %s is the parameter nr. %d of %08x" % (searchPattern, idx + 1, Eip)
+                        fd.write("[*] Found! %s is the %d parameter of %08x\n" % (searchPattern, idx + 1, Eip))
+                        fd.write("%s\n" % HexDump.hexblock(possibleString, suspectedPointer))
     
     
 
@@ -280,8 +290,6 @@ def generateFuncRangesFile():
 
     out_file = open(OUTPUTFILENAME, 'w')
     
-    nr_comb = 0
-    
     for interval in idaFuncInfo:
         if interval.split('-')[0] in interestingFunctions:
             out_file.write(interval)
@@ -319,6 +327,7 @@ def simple_debugger(address_file, program_file, arg_check):
     # Cleanup actions
     finally:
         debug.stop()
+        
 
 
 ############################################################################################
